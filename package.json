@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev:vite": "vite",
+    "dev:vite": "vite --host",
     "dev:server": "nodemon server/index.js",
     "dev": "concurrently \"npm run dev:vite\" \"npm run dev:server\"",
     "start": "npm run dev",

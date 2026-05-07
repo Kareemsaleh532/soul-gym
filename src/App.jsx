@@ -13,13 +13,14 @@ import {
   Loader2,
   RefreshCw,
   Clock,
-  ChevronRight
+  ChevronRight,
+  Menu
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { addMonths, addYears, addDays, format, isAfter } from 'date-fns';
 import MemberCard from './components/MemberCard';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = `http://${window.location.hostname}:5000/api`;
 
 function App() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -34,6 +35,14 @@ function App() {
   const [isNotifLoading, setIsNotifLoading] = useState(false);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [error, setError] = useState(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -203,61 +212,128 @@ function App() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-dark)' }}>
+      {/* Sidebar Overlay for Mobile */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsSidebarOpen(false)}
+            style={{ 
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+              background: 'rgba(0,0,0,0.5)', zIndex: 90, backdropFilter: 'blur(4px)' 
+            }}
+            className="show-mobile"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
       <aside style={{
         width: '280px', borderRight: '1px solid var(--glass-border)', padding: '32px 24px',
-        display: 'flex', flexDirection: 'column', gap: '32px', position: 'fixed', height: '100vh', zIndex: 10
+        display: 'flex', flexDirection: 'column', gap: '32px', position: 'fixed', height: '100vh', zIndex: 100,
+        transition: 'transform 0.3s ease',
+        background: 'var(--bg-dark)',
+        left: 0,
+        transform: windowWidth <= 1024 ? (isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)') : 'none'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ background: 'var(--primary)', padding: '8px', borderRadius: '12px', boxShadow: '0 0 20px var(--primary-glow)' }}>
-            <Dumbbell color="white" size={24} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ background: 'var(--primary)', padding: '8px', borderRadius: '12px', boxShadow: '0 0 20px var(--primary-glow)' }}>
+              <Dumbbell color="white" size={24} />
+            </div>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.5px' }}>
+              SOUL<span style={{ color: 'var(--primary)' }}>GYM</span>
+            </h1>
           </div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.5px' }}>
-            SOUL<span style={{ color: 'var(--primary)' }}>GYM</span>
-          </h1>
+          <button className="show-mobile" onClick={() => setIsSidebarOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)' }}>
+            <X size={24} />
+          </button>
         </div>
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active={activeTab === 'Dashboard'} onClick={() => setActiveTab('Dashboard')} />
-          <NavItem icon={<Users size={20} />} label="Members" active={activeTab === 'Members'} onClick={() => setActiveTab('Members')} />
+          <NavItem 
+            icon={<LayoutDashboard size={20} />} 
+            label="Dashboard" 
+            active={activeTab === 'Dashboard'} 
+            onClick={() => { setActiveTab('Dashboard'); setIsSidebarOpen(false); }} 
+          />
+          <NavItem 
+            icon={<Users size={20} />} 
+            label="Members" 
+            active={activeTab === 'Members'} 
+            onClick={() => { setActiveTab('Members'); setIsSidebarOpen(false); }} 
+          />
           <NavItem 
             icon={<Bell size={20} />} 
             label="Notifications" 
             active={activeTab === 'Notifications'} 
-            onClick={() => { setActiveTab('Notifications'); setUnreadNotifs(0); }} 
+            onClick={() => { setActiveTab('Notifications'); setUnreadNotifs(0); setIsSidebarOpen(false); }} 
             badge={unreadNotifs}
           />
-          <NavItem icon={<Settings size={20} />} label="Settings" active={activeTab === 'Settings'} onClick={() => setActiveTab('Settings')} />
+          <NavItem 
+            icon={<Settings size={20} />} 
+            label="Settings" 
+            active={activeTab === 'Settings'} 
+            onClick={() => { setActiveTab('Settings'); setIsSidebarOpen(false); }} 
+          />
         </nav>
       </aside>
 
-      <main style={{ marginLeft: '280px', flex: 1, padding: '40px', width: 'calc(100% - 280px)' }}>
+      <main style={{ 
+        marginLeft: windowWidth <= 1024 ? '0' : '280px', 
+        flex: 1, 
+        padding: windowWidth <= 1024 ? '20px' : '40px', 
+        width: windowWidth <= 1024 ? '100%' : 'calc(100% - 280px)',
+        minHeight: '100vh'
+      }}>
+        {/* Mobile Header */}
+        <div className="show-mobile" style={{ 
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+          marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px solid var(--glass-border)' 
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button onClick={() => setIsSidebarOpen(true)} style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', padding: '8px', borderRadius: '8px', color: 'var(--text-main)' }}>
+              <Menu size={24} />
+            </button>
+            <h1 style={{ fontSize: '1.25rem', fontWeight: 700 }}>SOULGYM</h1>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="primary-btn" style={{ padding: '8px' }} onClick={() => handleOpenModal()}>
+              <Plus size={20} />
+            </button>
+          </div>
+        </div>
+
         <style>{`
           @media (max-width: 1024px) {
-            aside { display: none !important; }
-            main { marginLeft: 0 !important; width: 100% !important; padding: 20px !important; }
+            aside { 
+              transform: ${isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)'} !important; 
+              display: flex !important;
+            }
           }
         `}</style>
 
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
+        <header className="flex-mobile-stack" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px', gap: '20px' }}>
           <div>
-            <h2 style={{ fontSize: '2.5rem', fontWeight: 700 }}>Management Dashboard</h2>
+            <h2 style={{ fontSize: 'clamp(1.5rem, 5vw, 2.5rem)', fontWeight: 700 }}>Management Dashboard</h2>
             <p style={{ color: 'var(--text-dim)' }}>{isLoading ? 'Updating database...' : "Live gym overview"}</p>
           </div>
-          <div style={{ display: 'flex', gap: '16px' }}>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
             <button className="primary-btn" onClick={fetchMembers} disabled={isLoading}>
               <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
-              Sync Data
+              <span className="hide-mobile">Sync Data</span>
             </button>
             <button className="primary-btn" onClick={() => handleOpenModal()}>
               <Plus size={20} />
-              New Subscription
+              <span>New Subscription</span>
             </button>
           </div>
         </header>
 
         {activeTab === 'Dashboard' ? (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '40px' }}>
+            <div className="stats-grid" style={{ marginBottom: '40px' }}>
               <StatCard label="Database Count" value={stats.total} onClick={() => setStatusFilter('all')} active={statusFilter === 'all'} />
               <StatCard label="Active Now" value={stats.active} color="var(--status-active)" onClick={() => setStatusFilter('active')} active={statusFilter === 'active'} />
               <StatCard label="Expiring Soon" value={stats.expiring} color="var(--status-warning)" onClick={() => setStatusFilter('warning')} active={statusFilter === 'warning'} />
@@ -266,14 +342,14 @@ function App() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '32px' }}>
               <section>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '20px' }}>
+                <div className="flex-mobile-stack" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px' }}>
                   <h3 style={{ fontSize: '1.25rem', fontWeight: 600, flex: 1 }}>Member Directory</h3>
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                    <div style={{ position: 'relative' }}>
+                  <div className="flex-mobile-stack" style={{ gap: '12px' }}>
+                    <div style={{ position: 'relative', width: '100%' }}>
                       <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
-                      <input type="text" placeholder="Search name or phone..." style={{ paddingLeft: '40px', width: '250px' }} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                      <input type="text" placeholder="Search name or phone..." style={{ paddingLeft: '40px', width: '100%', minWidth: '200px' }} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                     </div>
-                    <select className="glass-card" style={{ padding: '8px 16px', background: 'var(--surface)', color: 'white', borderRadius: '8px', cursor: 'pointer' }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                    <select className="glass-card" style={{ padding: '8px 16px', background: 'var(--surface)', color: 'white', borderRadius: '8px', cursor: 'pointer', width: '100%' }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                       <option value="all">All Status</option>
                       <option value="active">Active</option>
                       <option value="warning">Warning</option>
@@ -288,7 +364,7 @@ function App() {
                     <p style={{ color: 'var(--text-dim)' }}>Loading members...</p>
                   </div>
                 ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
+                  <div className="members-grid">
                     <AnimatePresence mode="popLayout">
                       {filteredMembers.map(member => (
                         <MemberCard key={member.id} member={member} onEdit={handleOpenModal} onDelete={handleDeleteMember} />
@@ -337,14 +413,14 @@ function App() {
           </div>
         ) : activeTab === 'Members' ? (
           <section>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+            <div className="flex-mobile-stack" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', gap: '16px' }}>
               <h3 style={{ fontSize: '1.5rem', fontWeight: 600 }}>Full Member Directory</h3>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <div style={{ position: 'relative' }}>
+              <div className="flex-mobile-stack" style={{ gap: '12px' }}>
+                <div style={{ position: 'relative', width: '100%' }}>
                   <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
-                  <input type="text" placeholder="Search members..." style={{ paddingLeft: '40px', width: '300px' }} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                  <input type="text" placeholder="Search members..." style={{ paddingLeft: '40px', width: '100%', minWidth: '200px' }} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
-                <select className="glass-card" style={{ padding: '8px 16px', background: 'var(--surface)', color: 'var(--text-main)', borderRadius: '8px', cursor: 'pointer' }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                <select className="glass-card" style={{ padding: '8px 16px', background: 'var(--surface)', color: 'var(--text-main)', borderRadius: '8px', cursor: 'pointer', width: '100%' }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                   <option value="all">All Members</option>
                   <option value="active">Active Only</option>
                   <option value="warning">Expiring Soon</option>
@@ -353,7 +429,7 @@ function App() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
+            <div className="members-grid">
               <AnimatePresence mode="popLayout">
                 {filteredMembers.map(member => (
                   <MemberCard key={member.id} member={member} onEdit={handleOpenModal} onDelete={handleDeleteMember} />
@@ -369,9 +445,9 @@ function App() {
             )}
           </section>
         ) : activeTab === 'Settings' ? (
-          <div style={{ maxWidth: '800px' }}>
+          <div style={{ width: '100%' }}>
             <h3 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '24px' }}>Appearance Settings</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px' }}>
+            <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
               <div 
                 onClick={() => setTheme('light')}
                 className="glass-card" 
@@ -430,8 +506,8 @@ function App() {
       {/* Add/Edit Member Modal */}
       <AnimatePresence>
         {isModalOpen && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(8px)' }}>
-            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="glass-card" style={{ width: '500px', background: 'var(--surface)', padding: '32px' }}>
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(8px)', padding: '20px' }}>
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="glass-card" style={{ width: '100%', maxWidth: '500px', background: 'var(--surface)', padding: 'clamp(16px, 5vw, 32px)', maxHeight: '90vh', overflowY: 'auto' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
                 <h3 style={{ fontSize: '1.75rem', fontWeight: 700 }}>{editingMember ? 'Update Subscription' : 'Register Member'}</h3>
                 <X size={24} style={{ cursor: 'pointer', color: 'var(--text-dim)' }} onClick={() => setIsModalOpen(false)} />

@@ -96,7 +96,7 @@ const MemberCard = ({ member, onEdit, onDelete }) => {
             <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>{member.plan_type || member.plan}</p>
           </div>
         </div>
-        <span className={`status-badge status-${status}`} style={{ marginRight: '60px' }}>
+        <span className={`status-badge status-${status}`} style={{ margin: '0 40px 0 0' }}>
           {getStatusLabel()}
         </span>
       </div>

@@ -60,6 +60,14 @@ body {
   border-radius: 16px;
   padding: 24px;
   transition: all 0.3s ease;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .glass-card {
+    padding: 16px;
+    border-radius: 12px;
+  }
 }
 
 .glass-card:hover {
@@ -80,6 +88,14 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .primary-btn {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+  }
 }
 
 .primary-btn:hover {
@@ -132,4 +148,57 @@ input:focus {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--primary);
+}
+
+/* Responsive Grids */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.members-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 640px) {
+  .members-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Utility for hiding on mobile/desktop */
+.hide-mobile {
+  @media (max-width: 1024px) {
+    display: none !important;
+  }
+}
+
+.show-mobile {
+  display: none !important;
+  @media (max-width: 1024px) {
+    display: block !important;
+  }
+}
+
+.flex-mobile-stack {
+  display: flex;
+  @media (max-width: 640px) {
+    flex-direction: column;
+    width: 100%;
+  }
 }
