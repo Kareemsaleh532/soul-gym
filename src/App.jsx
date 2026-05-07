@@ -155,7 +155,10 @@ function App() {
             subscription_end: newEndDate
           })
         });
-        if (!response.ok) throw new Error('Failed to update member');
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to update member');
+        }
         const updated = await response.json();
         setMembers(prev => prev.map(m => m.id === updated.id ? updated : m));
       } else {
@@ -164,7 +167,10 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData)
         });
-        if (!response.ok) throw new Error('Failed to add member');
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to add member');
+        }
         const newMember = await response.json();
         setMembers(prev => [...prev, newMember]);
       }
@@ -172,6 +178,7 @@ function App() {
     } catch (err) {
       alert(err.message);
     }
+
   };
 
   const handleDeleteMember = async (id) => {

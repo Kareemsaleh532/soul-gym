@@ -46,15 +46,18 @@ app.get('/api/notifications', async (req, res) => {
 
 // Add a new member
 app.post('/api/members', async (req, res) => {
+  console.log('POST /api/members received:', req.body);
   const { name, phone, plan_type, duration_months, duration_days } = req.body;
   
   // Validation
   const phoneRegex = /^(056|059)\d{7}$/;
   if (!phoneRegex.test(phone)) {
+    console.log('Validation failed for phone:', phone);
     return res.status(400).json({ error: 'Phone number must be 10 digits and start with 056 or 059' });
   }
 
   try {
+
     const startDate = new Date();
     let endDate;
     
@@ -76,9 +79,11 @@ app.post('/api/members', async (req, res) => {
     const newMember = await db.get('SELECT * FROM members WHERE id = ?', result.lastID);
     res.status(201).json(newMember);
   } catch (error) {
+    console.error('Error adding member:', error);
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // Check-in member (demo purpose)
 app.post('/api/members/:id/checkin', async (req, res) => {
