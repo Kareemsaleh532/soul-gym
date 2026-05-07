@@ -11,14 +11,8 @@ export default defineConfig({
   server: {
     https: true,
     host: true,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5000',
-        changeOrigin: true,
-        secure: false, // Don't verify self-signed cert on backend if any
-      },
-    },
   },
 })
+
 
 

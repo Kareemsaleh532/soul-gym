@@ -18,9 +18,9 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { addMonths, addYears, addDays, format, isAfter } from 'date-fns';
+import { supabase } from './lib/supabase';
 import MemberCard from './components/MemberCard';
 
-const API_URL = '/api';
 
 function App() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -56,10 +56,13 @@ function App() {
   const fetchMembers = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_URL}/members`);
-      if (!response.ok) throw new Error('Failed to fetch members');
-      const data = await response.json();
-      setMembers(data);
+      const { data, error } = await supabase
+        .from('members')
+        .select('*')
+        .order('subscription_end', { ascending: true });
+      
+      if (error) throw error;
+      setMembers(data || []);
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -71,12 +74,17 @@ function App() {
   const fetchNotifications = async () => {
     setIsNotifLoading(true);
     try {
-      const response = await fetch(`${API_URL}/notifications`);
-      if (!response.ok) throw new Error('Failed to fetch notifications');
-      const data = await response.json();
-      setNotifications(data);
+      const now = new Date().toISOString();
+      const { data, error } = await supabase
+        .from('members')
+        .select('*')
+        .lt('subscription_end', now)
+        .order('subscription_end', { ascending: false });
+
+      if (error) throw error;
+      setNotifications(data || []);
       if (activeTab !== 'Notifications') {
-        setUnreadNotifs(data.length);
+        setUnreadNotifs(data?.length || 0);
       }
     } catch (err) {
       console.error(err.message);
@@ -84,6 +92,7 @@ function App() {
       setIsNotifLoading(false);
     }
   };
+
 
   useEffect(() => {
     fetchMembers();
@@ -145,51 +154,73 @@ function App() {
           }
         }
 
-        const response = await fetch(`${API_URL}/members/${editingMember.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        const { data, error } = await supabase
+          .from('members')
+          .update({
             name: formData.name,
             phone: formData.phone,
             plan_type: formData.plan_type,
             subscription_end: newEndDate
           })
-        });
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || 'Failed to update member');
-        }
-        const updated = await response.json();
-        setMembers(prev => prev.map(m => m.id === updated.id ? updated : m));
+          .eq('id', editingMember.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        setMembers(prev => prev.map(m => m.id === data.id ? data : m));
       } else {
-        const response = await fetch(`${API_URL}/members`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData)
-        });
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || 'Failed to add member');
+        const startDate = new Date();
+        let endDate;
+        
+        if (formData.duration_days) {
+          endDate = addDays(startDate, parseInt(formData.duration_days));
+        } else if (formData.duration_months === '12') {
+          endDate = addYears(startDate, 1);
+        } else {
+          endDate = addMonths(startDate, parseInt(formData.duration_months));
         }
-        const newMember = await response.json();
-        setMembers(prev => [...prev, newMember]);
+
+        const avatar = `https://i.pravatar.cc/150?u=${formData.phone}`;
+
+        const { data, error } = await supabase
+          .from('members')
+          .insert([{
+            name: formData.name,
+            phone: formData.phone,
+            avatar,
+            plan_type: formData.plan_type,
+            subscription_start: startDate.toISOString(),
+            subscription_end: endDate.toISOString(),
+            last_check_in: 'Never'
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+        setMembers(prev => [...prev, data]);
       }
       setIsModalOpen(false);
     } catch (err) {
       alert(err.message);
     }
 
+
   };
 
   const handleDeleteMember = async (id) => {
     if (!window.confirm('Are you sure you want to remove this member?')) return;
     try {
-      const response = await fetch(`${API_URL}/members/${id}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error('Failed to delete member');
+      const { error } = await supabase
+        .from('members')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
       setMembers(prev => prev.filter(m => m.id !== id));
     } catch (err) {
       alert(err.message);
     }
+
   };
 
   const filteredMembers = useMemo(() => {
