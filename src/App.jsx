@@ -20,7 +20,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { addMonths, addYears, addDays, format, isAfter } from 'date-fns';
 import MemberCard from './components/MemberCard';
 
-const API_URL = `http://${window.location.hostname}:5000/api`;
+const API_URL = '/api';
 
 function App() {
   const [searchTerm, setSearchTerm] = useState('');
