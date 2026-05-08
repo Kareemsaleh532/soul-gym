@@ -202,3 +202,31 @@ input:focus {
     width: 100%;
   }
 }
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  backdrop-filter: blur(8px);
+  padding: 20px;
+}
+
+@media (max-width: 640px) {
+  .modal-overlay {
+    align-items: flex-start;
+    padding: 10px;
+    padding-top: 30px;
+  }
+  
+  .modal-content {
+    max-height: 85vh !important;
+    margin-bottom: 250px; /* Extra scroll space for keyboard */
+  }
+}

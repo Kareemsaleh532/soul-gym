@@ -605,8 +605,21 @@ function App() {
       {/* Add/Edit Member Modal */}
       <AnimatePresence>
         {isModalOpen && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, backdropFilter: 'blur(8px)', padding: '20px' }}>
-            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="glass-card" style={{ width: '100%', maxWidth: '500px', background: 'var(--surface)', padding: 'clamp(16px, 5vw, 32px)', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div className="modal-overlay">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.9, y: 20 }} 
+              className="glass-card modal-content" 
+              style={{ 
+                width: '100%', 
+                maxWidth: '500px', 
+                background: 'var(--surface)', 
+                padding: 'clamp(16px, 5vw, 32px)', 
+                maxHeight: '90vh', 
+                overflowY: 'auto' 
+              }}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
                 <h3 style={{ fontSize: '1.75rem', fontWeight: 700 }}>{editingMember ? 'Update Subscription' : 'Register Member'}</h3>
                 <X size={24} style={{ cursor: 'pointer', color: 'var(--text-dim)' }} onClick={() => setIsModalOpen(false)} />
