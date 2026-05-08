@@ -21,6 +21,8 @@ import { addMonths, addYears, addDays, format, isAfter } from 'date-fns';
 import { supabase } from './lib/supabase';
 import MemberCard from './components/MemberCard';
 
+const API_URL = '/api';
+
 
 function App() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,25 +46,24 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Form State
-  const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    plan_type: 'Pro Membership',
-    duration_months: '1',
-    duration_days: ''
-  });
-
+  // Initialize data fetching depending on whether Supabase is available
   const fetchMembers = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('members')
-        .select('*')
-        .order('subscription_end', { ascending: true });
-      
-      if (error) throw error;
-      setMembers(data || []);
+      if (supabase) {
+        const { data, error } = await supabase
+          .from('members')
+          .select('*')
+          .order('subscription_end', { ascending: true });
+        if (error) throw error;
+        setMembers(data || []);
+      } else {
+        // Fallback to local API
+        const response = await fetch(`${API_URL}/members`);
+        if (!response.ok) throw new Error('Local server error');
+        const data = await response.json();
+        setMembers(data || []);
+      }
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -75,16 +76,24 @@ function App() {
     setIsNotifLoading(true);
     try {
       const now = new Date().toISOString();
-      const { data, error } = await supabase
-        .from('members')
-        .select('*')
-        .lt('subscription_end', now)
-        .order('subscription_end', { ascending: false });
-
-      if (error) throw error;
-      setNotifications(data || []);
+      if (supabase) {
+        const { data, error } = await supabase
+          .from('members')
+          .select('*')
+          .lt('subscription_end', now)
+          .order('subscription_end', { ascending: false });
+        if (error) throw error;
+        setNotifications(data || []);
+      } else {
+        // Fallback to local API
+        const response = await fetch(`${API_URL}/members`);
+        if (!response.ok) throw new Error('Local server error');
+        const allData = await response.json();
+        const expired = allData.filter(m => new Date(m.subscription_end) < new Date());
+        setNotifications(expired || []);
+      }
       if (activeTab !== 'Notifications') {
-        setUnreadNotifs(data?.length || 0);
+        setUnreadNotifs(notifications.length);
       }
     } catch (err) {
       console.error(err.message);
@@ -154,20 +163,37 @@ function App() {
           }
         }
 
-        const { data, error } = await supabase
-          .from('members')
-          .update({
-            name: formData.name,
-            phone: formData.phone,
-            plan_type: formData.plan_type,
-            subscription_end: newEndDate
-          })
-          .eq('id', editingMember.id)
-          .select()
-          .single();
+        if (supabase) {
+          const { data, error } = await supabase
+            .from('members')
+            .update({
+              name: formData.name,
+              phone: formData.phone,
+              plan_type: formData.plan_type,
+              subscription_end: newEndDate
+            })
+            .eq('id', editingMember.id)
+            .select()
+            .single();
 
-        if (error) throw error;
-        setMembers(prev => prev.map(m => m.id === data.id ? data : m));
+          if (error) throw error;
+          setMembers(prev => prev.map(m => m.id === data.id ? data : m));
+        } else {
+          // Fallback to local API
+          const response = await fetch(`${API_URL}/members/${editingMember.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: formData.name,
+              phone: formData.phone,
+              plan_type: formData.plan_type,
+              subscription_end: newEndDate
+            })
+          });
+          if (!response.ok) throw new Error('Failed to update member locally');
+          const data = await response.json();
+          setMembers(prev => prev.map(m => m.id === data.id ? data : m));
+        }
       } else {
         const startDate = new Date();
         let endDate;
@@ -182,22 +208,41 @@ function App() {
 
         const avatar = `https://i.pravatar.cc/150?u=${formData.phone}`;
 
-        const { data, error } = await supabase
-          .from('members')
-          .insert([{
-            name: formData.name,
-            phone: formData.phone,
-            avatar,
-            plan_type: formData.plan_type,
-            subscription_start: startDate.toISOString(),
-            subscription_end: endDate.toISOString(),
-            last_check_in: 'Never'
-          }])
-          .select()
-          .single();
+        if (supabase) {
+          const { data, error } = await supabase
+            .from('members')
+            .insert([{
+              name: formData.name,
+              phone: formData.phone,
+              avatar,
+              plan_type: formData.plan_type,
+              subscription_start: startDate.toISOString(),
+              subscription_end: endDate.toISOString(),
+              last_check_in: 'Never'
+            }])
+            .select()
+            .single();
 
-        if (error) throw error;
-        setMembers(prev => [...prev, data]);
+          if (error) throw error;
+          setMembers(prev => [...prev, data]);
+        } else {
+          // Fallback to local API
+          const response = await fetch(`${API_URL}/members`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: formData.name,
+              phone: formData.phone,
+              avatar,
+              plan_type: formData.plan_type,
+              subscription_start: startDate.toISOString(),
+              subscription_end: endDate.toISOString()
+            })
+          });
+          if (!response.ok) throw new Error('Failed to add member locally');
+          const data = await response.json();
+          setMembers(prev => [...prev, data]);
+        }
       }
       setIsModalOpen(false);
     } catch (err) {
@@ -210,12 +255,17 @@ function App() {
   const handleDeleteMember = async (id) => {
     if (!window.confirm('Are you sure you want to remove this member?')) return;
     try {
-      const { error } = await supabase
-        .from('members')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
+      if (supabase) {
+        const { error } = await supabase
+          .from('members')
+          .delete()
+          .eq('id', id);
+        
+        if (error) throw error;
+      } else {
+        const response = await fetch(`${API_URL}/members/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Failed to delete member locally');
+      }
       setMembers(prev => prev.filter(m => m.id !== id));
     } catch (err) {
       alert(err.message);
@@ -231,8 +281,8 @@ function App() {
       const endDate = new Date(member.subscription_end);
       const daysLeft = Math.ceil((endDate - new Date()) / (1000 * 60 * 60 * 24));
       const isActive = endDate > new Date();
-      if (statusFilter === 'active') return isActive && daysLeft > 7;
-      if (statusFilter === 'warning') return isActive && daysLeft > 0 && daysLeft <= 7;
+      if (statusFilter === 'active') return isActive && daysLeft > 10;
+      if (statusFilter === 'warning') return isActive && daysLeft > 0 && daysLeft <= 10;
       if (statusFilter === 'expired') return !isActive;
       return true;
     });
@@ -240,10 +290,13 @@ function App() {
 
   const stats = {
     total: members.length,
-    active: members.filter(m => new Date(m.subscription_end) > new Date()).length,
+    active: members.filter(m => {
+      const days = Math.ceil((new Date(m.subscription_end) - new Date()) / (1000 * 60 * 60 * 24));
+      return days > 10;
+    }).length,
     expiring: members.filter(m => {
       const days = Math.ceil((new Date(m.subscription_end) - new Date()) / (1000 * 60 * 60 * 24));
-      return days > 0 && days <= 7;
+      return days > 0 && days <= 10;
     }).length,
     expired: members.filter(m => new Date(m.subscription_end) <= new Date()).length,
   };
@@ -598,7 +651,7 @@ function App() {
                     </select>
 
                     <input
-                      type="number"
+                      type="text"
                       placeholder="Or enter days..."
                       style={{ width: '100%' }}
                       value={formData.duration_days}
