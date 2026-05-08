@@ -93,7 +93,7 @@ function App() {
         setNotifications(expired || []);
       }
       if (activeTab !== 'Notifications') {
-        setUnreadNotifs(notifications.length);
+        setUnreadNotifs(expired.length);
       }
     } catch (err) {
       console.error(err.message);
@@ -118,6 +118,14 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  const [formData, setFormData] = useState({
+    name: '',
+    phone: '',
+    plan_type: 'Pro Membership',
+    duration_months: '1',
+    duration_days: ''
+  });
 
   const handleOpenModal = (member = null) => {
     if (member) {

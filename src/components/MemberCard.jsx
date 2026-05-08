@@ -12,7 +12,7 @@ const MemberCard = ({ member, onEdit, onDelete }) => {
   
   let status = 'active';
   if (!isActive) status = 'expired';
-  else if (daysLeft <= 7) status = 'warning';
+  else if (daysLeft <= 10) status = 'warning';
 
   const getStatusLabel = () => {
     if (status === 'active') return 'Subscribed';
