@@ -15,7 +15,7 @@ export async function setupDb() {
     CREATE TABLE IF NOT EXISTS members (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
-      phone TEXT NOT NULL,
+      phone TEXT,
       avatar TEXT,
       plan_type TEXT NOT NULL,
       subscription_start DATETIME DEFAULT CURRENT_TIMESTAMP,

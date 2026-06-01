@@ -50,10 +50,12 @@ app.post('/api/members', async (req, res) => {
   const { name, phone, plan_type, duration_months, duration_days } = req.body;
   
   // Validation
-  const phoneRegex = /^(056|059)\d{7}$/;
-  if (!phoneRegex.test(phone)) {
-    console.log('Validation failed for phone:', phone);
-    return res.status(400).json({ error: 'Phone number must be 10 digits and start with 056 or 059' });
+  if (phone) {
+    const phoneRegex = /^(056|059)\d{7}$/;
+    if (!phoneRegex.test(phone)) {
+      console.log('Validation failed for phone:', phone);
+      return res.status(400).json({ error: 'Phone number must be 10 digits and start with 056 or 059' });
+    }
   }
 
   try {
@@ -69,7 +71,7 @@ app.post('/api/members', async (req, res) => {
       endDate = addMonths(startDate, parseInt(duration_months));
     }
 
-    const avatar = `https://i.pravatar.cc/150?u=${phone}`;
+    const avatar = `https://i.pravatar.cc/150?u=${phone || encodeURIComponent(name)}`;
     
     const result = await db.run(
       'INSERT INTO members (name, phone, avatar, plan_type, subscription_start, subscription_end, last_check_in) VALUES (?, ?, ?, ?, ?, ?, ?)',

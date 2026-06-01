@@ -90,7 +90,7 @@ const MemberCard = ({ member, onEdit, onDelete }) => {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <img src={member.avatar} alt={member.name} style={{ width: '56px', height: '56px', borderRadius: '14px', objectFit: 'cover', border: '2px solid var(--glass-border)' }} />
+          <div style={{ width: '56px', height: '56px', borderRadius: '14px', background: 'var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }}>No Photo</div>
           <div>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>{member.name}</h3>
             <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>{member.plan_type || member.plan}</p>
@@ -104,7 +104,7 @@ const MemberCard = ({ member, onEdit, onDelete }) => {
       <div style={{ display: 'grid', gap: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-dim)', fontSize: '0.9rem' }}>
           <Phone size={16} />
-          <span>{member.phone}</span>
+          <span>{member.phone || '—'}</span>
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

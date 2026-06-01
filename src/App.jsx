@@ -39,6 +39,10 @@ function App() {
   const [error, setError] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  // New pagination and debounce states
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 20;
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -46,6 +50,14 @@ function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Debounce search term to avoid filtering on every keystroke
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setPage(1); // Reset to first page on new search
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
   // Initialize data fetching depending on whether Supabase is available
   const fetchMembers = async () => {
     setIsLoading(true);
@@ -147,10 +159,12 @@ function App() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    const phoneRegex = /^(056|059)\d{7}$/;
-    if (!phoneRegex.test(formData.phone)) {
-      alert('Phone number must be 10 digits and start with 056 or 059');
-      return;
+    if (formData.phone && formData.phone.trim()) {
+      const phoneRegex = /^(056|059)\d{7}$/;
+      if (!phoneRegex.test(formData.phone)) {
+        alert('Phone number must be 10 digits and start with 056 or 059');
+        return;
+      }
     }
 
     try {
@@ -214,7 +228,7 @@ function App() {
           endDate = addMonths(startDate, parseInt(formData.duration_months));
         }
 
-        const avatar = `https://i.pravatar.cc/150?u=${formData.phone}`;
+        const avatar = `https://i.pravatar.cc/150?u=${formData.phone || encodeURIComponent(formData.name)}`;
 
         if (supabase) {
           const { data, error } = await supabase
@@ -282,9 +296,10 @@ function App() {
   };
 
   const filteredMembers = useMemo(() => {
-    return members.filter(member => {
-      const matchesSearch = member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.phone.toLowerCase().includes(searchTerm.toLowerCase());
+    // First filter based on search and status filter
+    const filtered = members.filter(member => {
+      const matchesSearch = member.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        (member.phone && member.phone.toLowerCase().includes(debouncedSearch.toLowerCase()));
       if (!matchesSearch) return false;
       const endDate = new Date(member.subscription_end);
       const daysLeft = Math.ceil((endDate - new Date()) / (1000 * 60 * 60 * 24));
@@ -294,7 +309,25 @@ function App() {
       if (statusFilter === 'expired') return !isActive;
       return true;
     });
-  }, [searchTerm, statusFilter, members]);
+
+    // Sort so active members appear first, then warning, then expired
+    const getStatusRank = (member) => {
+      const end = new Date(member.subscription_end);
+      const days = Math.ceil((end - new Date()) / (1000 * 60 * 60 * 24));
+      const active = end > new Date();
+      if (active && days > 10) return 0; // active
+      if (!active) return 1; // expired
+      // active && days > 0 && days <= 10
+      return 2; // warning (expiring soon)
+    };
+    filtered.sort((a, b) => getStatusRank(a) - getStatusRank(b));
+    return filtered;
+  }, [debouncedSearch, statusFilter, members]);
+
+  const paginatedMembers = useMemo(() => {
+    const startIndex = (page - 1) * itemsPerPage;
+    return filteredMembers.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredMembers, page]);
 
   const stats = {
     total: members.length,
@@ -435,8 +468,8 @@ function App() {
             <div className="stats-grid" style={{ marginBottom: '40px' }}>
               <StatCard label="Database Count" value={stats.total} onClick={() => setStatusFilter('all')} active={statusFilter === 'all'} />
               <StatCard label="Active Now" value={stats.active} color="var(--status-active)" onClick={() => setStatusFilter('active')} active={statusFilter === 'active'} />
-              <StatCard label="Expiring Soon" value={stats.expiring} color="var(--status-warning)" onClick={() => setStatusFilter('warning')} active={statusFilter === 'warning'} />
               <StatCard label="Expired" value={stats.expired} color="var(--status-expired)" onClick={() => setStatusFilter('expired')} active={statusFilter === 'expired'} />
+              <StatCard label="Expiring Soon" value={stats.expiring} color="var(--status-warning)" onClick={() => setStatusFilter('warning')} active={statusFilter === 'warning'} />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '32px' }}>
@@ -448,12 +481,12 @@ function App() {
                       <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
                       <input type="text" placeholder="Search name or phone..." style={{ paddingLeft: '40px', width: '100%', minWidth: '200px' }} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                     </div>
-                    <select className="glass-card" style={{ padding: '8px 16px', background: 'var(--surface)', color: 'white', borderRadius: '8px', cursor: 'pointer', width: '100%' }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                      <option value="all">All Status</option>
-                      <option value="active">Active</option>
-                      <option value="warning">Warning</option>
-                      <option value="expired">Expired</option>
-                    </select>
+                      <select className="glass-card" style={{ padding: '8px 16px', background: 'var(--surface)', color: 'white', borderRadius: '8px', cursor: 'pointer', width: '100%' }} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                        <option value="all">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="expired">Expired</option>
+                        <option value="warning">Warning</option>
+                      </select>
                   </div>
                 </div>
 
@@ -465,12 +498,30 @@ function App() {
                 ) : (
                   <div className="members-grid">
                     <AnimatePresence mode="popLayout">
-                      {filteredMembers.map(member => (
+                      {paginatedMembers.map(member => (
                         <MemberCard key={member.id} member={member} onEdit={handleOpenModal} onDelete={handleDeleteMember} />
                       ))}
                     </AnimatePresence>
                   </div>
                 )}
+                {/* Pagination Controls */}
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '16px' }}>
+                  <button
+                    className="primary-btn"
+                    disabled={page === 1}
+                    onClick={() => setPage(prev => Math.max(prev - 1, 1))}
+                  >
+                    Prev
+                  </button>
+                  <span style={{ alignSelf: 'center' }}>Page {page} of {Math.ceil(filteredMembers.length / itemsPerPage) || 1}</span>
+                  <button
+                    className="primary-btn"
+                    disabled={page >= Math.ceil(filteredMembers.length / itemsPerPage)}
+                    onClick={() => setPage(prev => prev + 1)}
+                  >
+                    Next
+                  </button>
+                </div>
               </section>
             </div>
           </>
@@ -494,7 +545,7 @@ function App() {
                 {notifications.map(member => (
                   <div key={member.id} className="glass-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: '4px solid var(--status-expired)' }}>
                     <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                      <img src={member.avatar} alt="" style={{ width: '48px', height: '48px', borderRadius: '12px' }} />
+                      <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }}>No Photo</div>
                       <div>
                         <div style={{ fontWeight: 600 }}>{member.name}'s subscription has ended</div>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>
@@ -530,10 +581,29 @@ function App() {
 
             <div className="members-grid">
               <AnimatePresence mode="popLayout">
-                {filteredMembers.map(member => (
+                {paginatedMembers.map(member => (
                   <MemberCard key={member.id} member={member} onEdit={handleOpenModal} onDelete={handleDeleteMember} />
                 ))}
               </AnimatePresence>
+            </div>
+
+            {/* Pagination Controls */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '16px' }}>
+              <button
+                className="primary-btn"
+                disabled={page === 1}
+                onClick={() => setPage(prev => Math.max(prev - 1, 1))}
+              >
+                Prev
+              </button>
+              <span style={{ alignSelf: 'center' }}>Page {page} of {Math.ceil(filteredMembers.length / itemsPerPage) || 1}</span>
+              <button
+                className="primary-btn"
+                disabled={page >= Math.ceil(filteredMembers.length / itemsPerPage)}
+                onClick={() => setPage(prev => prev + 1)}
+              >
+                Next
+              </button>
             </div>
             
             {filteredMembers.length === 0 && (
@@ -632,7 +702,7 @@ function App() {
                 </div>
                 <div style={{ display: 'grid', gap: '8px' }}>
                   <label style={{ fontSize: '0.9rem', color: 'var(--text-dim)', fontWeight: 600 }}>Phone Number (056 or 059)</label>
-                  <input type="tel" required placeholder="05xXXXXXXX" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
+                  <input type="tel" placeholder="05xXXXXXXX (Optional)" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
                 </div>
 
                 <div style={{ display: 'grid', gap: '8px' }}>
