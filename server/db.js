@@ -5,10 +5,13 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export async function setupDb() {
+let _db = null;
+
+export async function getDb() {
+  if (_db) return _db;
   const db = await open({
     filename: path.join(__dirname, 'soulgym.db'),
-    driver: sqlite3.Database
+    driver: sqlite3.Database,
   });
 
   await db.exec(`
@@ -24,7 +27,7 @@ export async function setupDb() {
     )
   `);
 
-  // Check if seeding is needed
+  // Seed if empty
   const count = await db.get('SELECT COUNT(*) as count FROM members');
   if (count.count === 0) {
     const { addMonths, addDays, subDays } = await import('date-fns');
@@ -33,9 +36,9 @@ export async function setupDb() {
     await db.run(`
       INSERT INTO members (name, phone, avatar, plan_type, subscription_start, subscription_end, last_check_in)
       VALUES 
-      ('Alex Johnson', '0569123456', 'https://i.pravatar.cc/150?u=1', 'Pro Membership', ?, ?, '2 hours ago'),
-      ('Sarah Miller', '0598765432', 'https://i.pravatar.cc/150?u=2', 'Basic Plan', ?, ?, 'Yesterday'),
-      ('Mike Ross', '0561112223', 'https://i.pravatar.cc/150?u=3', 'Elite Training', ?, ?, '1 week ago')
+        ('Alex Johnson', '0569123456', 'https://i.pravatar.cc/150?u=1', 'Pro Membership', ?, ?, '2 hours ago'),
+        ('Sarah Miller', '0598765432', 'https://i.pravatar.cc/150?u=2', 'Basic Plan', ?, ?, 'Yesterday'),
+        ('Mike Ross', '0561112223', 'https://i.pravatar.cc/150?u=3', 'Elite Training', ?, ?, '1 week ago')
     `, [
       now.toISOString(), addDays(now, 20).toISOString(),
       now.toISOString(), addDays(now, 3).toISOString(),
@@ -43,5 +46,6 @@ export async function setupDb() {
     ]);
   }
 
+  _db = db;
   return db;
 }

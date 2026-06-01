@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { addMonths, addYears, addDays, format, isAfter } from 'date-fns';
-import { supabase } from './lib/supabase';
+const supabase = null; // No Supabase in this setup
 import MemberCard from './components/MemberCard';
 
 const API_URL = '/api';
