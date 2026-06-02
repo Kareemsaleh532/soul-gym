@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import * as xlsx from 'xlsx';
+import xlsx from 'xlsx';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
@@ -29,7 +29,7 @@ async function importExcel(filePath) {
     }
 
     console.log(`Reading file: ${filePath}`);
-    const workbook = xlsx.readFile(filePath);
+    const workbook = xlsx.readFile(filePath, { cellDates: true });
     const sheetName = workbook.SheetNames[0]; // Read first sheet
     const sheet = workbook.Sheets[sheetName];
     const data = xlsx.utils.sheet_to_json(sheet);
@@ -37,29 +37,64 @@ async function importExcel(filePath) {
     console.log(`Found ${data.length} rows. Preparing to upload to Supabase...`);
 
     // Map the excel columns to your Supabase table columns
-    const formattedData = data.map(row => {
+    const formattedData = data.filter(row => row.Names || row.name || row['الاسم']).map(row => {
+      let plan = row.Length || row.plan_type || row.Plan || row['الاشتراك'] || 'Basic Plan';
+      if (typeof plan === 'number') {
+        plan = plan + ' Months';
+      }
+
+      let startDate = new Date();
+      if (row['Date Paid']) {
+        const d = new Date(row['Date Paid']);
+        if (!isNaN(d)) startDate = d;
+      } else if (row.subscription_start) {
+        const d = new Date(row.subscription_start);
+        if (!isNaN(d)) startDate = d;
+      }
+
+      let endDate = new Date();
+      if (row.Expiration) {
+        const d = new Date(row.Expiration);
+        if (!isNaN(d)) endDate = d;
+      } else if (row.subscription_end) {
+        const d = new Date(row.subscription_end);
+        if (!isNaN(d)) endDate = d;
+      }
+      
+      // Force the year to 2026 as requested
+      startDate.setFullYear(2026);
+      endDate.setFullYear(2026);
+
       return {
-        // Here we try to catch different possible column names (English / Arabic)
-        name: row.name || row.Name || row['الاسم'] || row['اسم العضو'] || 'Unknown',
-        phone: (row.phone || row.Phone || row['الهاتف'] || row['رقم الهاتف'] || '').toString(),
-        plan_type: row.plan_type || row.Plan || row['نوع الاشتراك'] || row['الاشتراك'] || 'Basic Plan',
-        
-        // Ensure dates are converted properly if they exist, otherwise use current date
-        subscription_start: row.subscription_start || row['بداية الاشتراك'] ? new Date(row.subscription_start || row['بداية الاشتراك']).toISOString() : new Date().toISOString(),
-        subscription_end: row.subscription_end || row['نهاية الاشتراك'] ? new Date(row.subscription_end || row['نهاية الاشتراك']).toISOString() : new Date().toISOString(),
+        name: row.Names || row.name || row.Name || row['الاسم'] || row['اسم العضو'] || 'Unknown',
+        phone: (row.phone || row.Phone || row['الهاتف'] || row['رقم الهاتف'] || '0000000000').toString(),
+        plan_type: plan.toString(),
+        subscription_start: startDate.toISOString(),
+        subscription_end: endDate.toISOString(),
       };
     });
 
-    const { data: insertedData, error } = await supabase
-      .from('members')
-      .insert(formattedData)
-      .select();
+    console.log(`Filtered to ${formattedData.length} valid rows. Uploading...`);
 
-    if (error) {
-      console.error('Error inserting data:', error);
-    } else {
-      console.log(`Successfully imported ${insertedData.length} rows into Supabase!`);
+    // Insert in batches of 1000 just in case
+    const batchSize = 1000;
+    let totalInserted = 0;
+
+    for (let i = 0; i < formattedData.length; i += batchSize) {
+      const batch = formattedData.slice(i, i + batchSize);
+      const { data: insertedData, error } = await supabase
+        .from('members')
+        .insert(batch)
+        .select();
+
+      if (error) {
+        console.error('Error inserting data batch:', error);
+      } else {
+        totalInserted += insertedData.length;
+      }
     }
+
+    console.log(`Successfully imported ${totalInserted} rows into Supabase!`);
 
   } catch (err) {
     console.error('Failed to import data:', err);
