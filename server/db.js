@@ -27,7 +27,7 @@ export async function setupDb() {
   // Check if seeding is needed
   const count = await db.get('SELECT COUNT(*) as count FROM members');
   if (count.count === 0) {
-    const { addMonths, addDays, subDays } = await import('date-fns');
+    const { addDays, subDays } = await import('date-fns');
     const now = new Date();
     
     await db.run(`
