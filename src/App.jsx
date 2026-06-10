@@ -18,8 +18,6 @@ import { addMonths, addYears, addDays, format, isAfter } from 'date-fns';
 import { supabase } from './lib/supabase';
 import MemberCard from './components/MemberCard';
 
-const API_URL = '/api';
-
 const copy = {
   ar: {
     langName: 'English',
@@ -239,64 +237,74 @@ function App() {
     }, 300);
     return () => clearTimeout(handler);
   }, [searchTerm]);
-  // Initialize data fetching depending on whether Supabase is available
+  // Initialize data fetching from Supabase
   const fetchMembers = useCallback(async () => {
     await Promise.resolve();
     setIsLoading(true);
     try {
-      if (supabase) {
+      if (!supabase) {
+        throw new Error('لم يتم تهيئة اتصال Supabase. يرجى التحقق من كونسول المتصفح وملف البيئة .env في جذر المشروع.');
+      }
+      
+      let allMembers = [];
+      let keepFetching = true;
+      let offset = 0;
+      const limit = 1000;
+
+      while (keepFetching) {
         const { data, error } = await supabase
           .from('members')
           .select('*')
+          .range(offset, offset + limit - 1)
           .order('subscription_end', { ascending: true });
+          
         if (error) throw error;
-        setMembers(data || []);
-      } else {
-        // Fallback to local API
-        const response = await fetch(`${API_URL}/members`);
-        if (!response.ok) throw new Error(t.localServerError);
-        const data = await response.json();
-        setMembers(data || []);
+        
+        if (!data || data.length === 0) {
+          keepFetching = false;
+        } else {
+          allMembers = [...allMembers, ...data];
+          offset += limit;
+          if (data.length < limit) {
+            keepFetching = false;
+          }
+        }
       }
+
+      setMembers(allMembers);
       setError(null);
     } catch (err) {
       setError(err.message);
     } finally {
       setIsLoading(false);
     }
-  }, [t.localServerError]);
+  }, []);
 
   const fetchNotifications = useCallback(async (shouldUpdateUnread = true) => {
     await Promise.resolve();
     setIsNotifLoading(true);
     try {
       const now = new Date().toISOString();
-      let expiredMembers = [];
-      if (supabase) {
-        const { data, error } = await supabase
-          .from('members')
-          .select('*')
-          .lt('subscription_end', now)
-          .order('subscription_end', { ascending: false });
-        if (error) throw error;
-        expiredMembers = data || [];
-      } else {
-        // Fallback to local API
-        const response = await fetch(`${API_URL}/members`);
-        if (!response.ok) throw new Error(t.localServerError);
-        const allData = await response.json();
-        expiredMembers = allData.filter(m => new Date(m.subscription_end) < new Date());
+      if (!supabase) {
+        throw new Error('لم يتم تهيئة اتصال Supabase.');
       }
+      const { data, error } = await supabase
+        .from('members')
+        .select('*')
+        .lt('subscription_end', now)
+        .order('subscription_end', { ascending: false });
+      if (error) throw error;
+      const expiredMembers = data || [];
       setNotifications(expiredMembers);
       if (shouldUpdateUnread) {
         setUnreadNotifs(expiredMembers.length);
       }
     } catch (err) {
-      console.error(err.message);
+      console.error('فشل جلب التنبيهات من Supabase:', err.message);
     } finally {
       setIsNotifLoading(false);
     }
-  }, [t.localServerError]);
+  }, []);
 
 
   useEffect(() => {
@@ -411,10 +419,15 @@ function App() {
         alert(t.fixValidation);
         return;
       }
+
+      if (!supabase) {
+        throw new Error('فشل حفظ البيانات: الاتصال بـ Supabase غير متوفر.');
+      }
+
       let avatarUrl = avatarPreview || '';
 
-      // If a new file is selected and supabase available, upload it
-      if (avatarFile && supabase) {
+      // If a new file is selected, upload it to Supabase storage
+      if (avatarFile) {
         try {
           const path = `avatars/${Date.now()}_${avatarFile.name}`;
           const { error: uploadErr } = await supabase.storage.from('avatars').upload(path, avatarFile, { upsert: true });
@@ -443,40 +456,21 @@ function App() {
           }
         }
 
-        if (supabase) {
-          const { data, error } = await supabase
-            .from('members')
-            .update({
-              name: formData.name,
-              phone: formData.phone,
-              plan_type: formData.plan_type,
-              subscription_end: newEndDate
-            })
-            .eq('id', editingMember.id)
-            .select()
-            .single();
+        const { data, error } = await supabase
+          .from('members')
+          .update({
+            name: formData.name,
+            phone: formData.phone,
+            plan_type: formData.plan_type,
+            subscription_end: newEndDate,
+            avatar: avatarUrl
+          })
+          .eq('id', editingMember.id)
+          .select()
+          .single();
 
-          if (error) throw error;
-          // attach avatar if available
-          if (avatarUrl) data.avatar = avatarUrl;
-          setMembers(prev => prev.map(m => m.id === data.id ? data : m));
-        } else {
-          // Fallback to local API
-          const response = await fetch(`${API_URL}/members/${editingMember.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: formData.name,
-              phone: formData.phone,
-              plan_type: formData.plan_type,
-              subscription_end: newEndDate
-            })
-          });
-          if (!response.ok) throw new Error(t.failedUpdateLocal);
-          const data = await response.json();
-          if (avatarUrl) data.avatar = avatarUrl;
-          setMembers(prev => prev.map(m => m.id === data.id ? data : m));
-        }
+        if (error) throw error;
+        setMembers(prev => prev.map(m => m.id === data.id ? data : m));
       } else {
         const startDate = new Date();
         let endDate;
@@ -491,67 +485,27 @@ function App() {
 
         const avatar = `https://i.pravatar.cc/150?u=${formData.phone || encodeURIComponent(formData.name)}`;
 
-        if (supabase) {
-          const { data, error } = await supabase
-            .from('members')
-            .insert([{
-              name: formData.name,
-              phone: formData.phone,
-              avatar: avatarUrl || avatar,
-              plan_type: formData.plan_type,
-              subscription_start: startDate.toISOString(),
-              subscription_end: endDate.toISOString(),
-              last_check_in: 'Never'
-            }])
-            .select()
-            .single();
-
-          if (error) throw error;
-          if (avatarUrl) data.avatar = avatarUrl;
-          setMembers(prev => [...prev, data]);
-        } else {
-          // Fallback to local API
-          let payload = {
+        const { data, error } = await supabase
+          .from('members')
+          .insert([{
             name: formData.name,
             phone: formData.phone,
-            avatar,
+            avatar: avatarUrl || avatar,
             plan_type: formData.plan_type,
             subscription_start: startDate.toISOString(),
-            subscription_end: endDate.toISOString()
-          };
+            subscription_end: endDate.toISOString(),
+            last_check_in: 'Never'
+          }])
+          .select()
+          .single();
 
-          // if file provided but no supabase, convert to data URL
-          if (avatarFile && !avatarUrl) {
-            const toDataUrl = (file) => new Promise((res, rej) => {
-              const reader = new FileReader();
-              reader.onload = () => res(reader.result);
-              reader.onerror = rej;
-              reader.readAsDataURL(file);
-            });
-            try {
-              const dataUrl = await toDataUrl(avatarFile);
-              payload.avatar = dataUrl;
-            } catch (e) {
-              console.warn('Failed to read avatar file locally', e);
-            }
-          }
-
-          const response = await fetch(`${API_URL}/members`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          if (!response.ok) throw new Error(t.failedAddLocal);
-          const data = await response.json();
-          setMembers(prev => [...prev, data]);
-        }
+        if (error) throw error;
+        setMembers(prev => [...prev, data]);
       }
       setIsModalOpen(false);
     } catch (err) {
       alert(err.message);
     }
-
-
   };
   const handleDeleteMember = async (id) => {
     if (!window.confirm(t.confirmRemove)) return;
@@ -572,16 +526,14 @@ function App() {
     // remove from pendingDeletes
     setPendingDeletes(prev => prev.filter(p => p.member.id !== id));
     try {
-      if (supabase) {
-        const { error } = await supabase
-          .from('members')
-          .delete()
-          .eq('id', id);
-        if (error) throw error;
-      } else {
-        const response = await fetch(`${API_URL}/members/${id}`, { method: 'DELETE' });
-        if (!response.ok) throw new Error(t.localServerError);
+      if (!supabase) {
+        throw new Error('لم يتم تهيئة اتصال Supabase.');
       }
+      const { error } = await supabase
+        .from('members')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
     } catch (err) {
       // restore on failure
       setMembers(prev => (prev.find(m => m.id === id) ? prev : [...prev, member]));
