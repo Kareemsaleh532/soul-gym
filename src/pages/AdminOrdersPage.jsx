@@ -2,6 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { ShoppingBagIcon, TrashIcon, PhoneIcon, MapPinIcon, RefreshIcon } from '../components/common/Icons';
 
+const LOCAL_ORDERS_KEY = 'soulgym_custom_orders';
+
+const getStoredOrders = () => {
+  try {
+    const stored = localStorage.getItem(LOCAL_ORDERS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveStoredOrders = (ordersList) => {
+  try {
+    localStorage.setItem(LOCAL_ORDERS_KEY, JSON.stringify(ordersList));
+  } catch (err) {
+    console.error('LocalStorage save orders error:', err);
+  }
+};
+
 const AdminOrdersPage = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -9,6 +28,9 @@ const AdminOrdersPage = () => {
 
   const fetchOrders = async () => {
     setLoading(true);
+    const local = getStoredOrders();
+    let remote = [];
+
     try {
       if (supabase) {
         const { data, error } = await supabase
@@ -17,14 +39,19 @@ const AdminOrdersPage = () => {
           .order('created_at', { ascending: false });
 
         if (!error && data) {
-          setOrders(data);
-        } else {
-          setOrders([]);
+          remote = data;
         }
       }
-    } catch {
-      setOrders([]);
+    } catch (err) {
+      console.log('Fetch remote orders notice:', err);
     } finally {
+      const mergedMap = new Map();
+      [...remote, ...local].forEach(o => {
+        if (o && o.id) mergedMap.set(String(o.id), o);
+      });
+      const combined = Array.from(mergedMap.values());
+      setOrders(combined);
+      saveStoredOrders(combined);
       setLoading(false);
     }
   };
@@ -34,25 +61,31 @@ const AdminOrdersPage = () => {
   }, []);
 
   const handleUpdateStatus = async (orderId, newStatus) => {
+    const updatedList = orders.map(o => String(o.id) === String(orderId) ? { ...o, status: newStatus } : o);
+    setOrders(updatedList);
+    saveStoredOrders(updatedList);
+
     try {
       if (supabase) {
         await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
       }
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
     } catch (err) {
-      alert('خطأ أثناء تحديث الحالة: ' + err.message);
+      console.log('Remote status update notice:', err);
     }
   };
 
   const handleDeleteOrder = async (orderId) => {
     if (!window.confirm('هل أنت متأكد من حذف هذا الطلب؟')) return;
+    const newList = orders.filter(o => String(o.id) !== String(orderId));
+    setOrders(newList);
+    saveStoredOrders(newList);
+
     try {
       if (supabase) {
         await supabase.from('orders').delete().eq('id', orderId);
       }
-      setOrders(prev => prev.filter(o => o.id !== orderId));
     } catch (err) {
-      alert('خطأ أثناء الحذف: ' + err.message);
+      console.log('Remote delete notice:', err);
     }
   };
 

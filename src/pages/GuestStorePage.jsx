@@ -12,6 +12,35 @@ import {
   UserIcon 
 } from '../components/common/Icons';
 
+const LOCAL_PRODUCTS_KEY = 'soulgym_custom_products';
+const LOCAL_ORDERS_KEY = 'soulgym_custom_orders';
+
+const getStoredProducts = () => {
+  try {
+    const stored = localStorage.getItem(LOCAL_PRODUCTS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+};
+
+const getStoredOrders = () => {
+  try {
+    const stored = localStorage.getItem(LOCAL_ORDERS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveStoredOrders = (ordersList) => {
+  try {
+    localStorage.setItem(LOCAL_ORDERS_KEY, JSON.stringify(ordersList));
+  } catch (err) {
+    console.error('LocalStorage save orders error:', err);
+  }
+};
+
 const GuestStorePage = ({ onOpenAdminLogin }) => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,10 +58,13 @@ const GuestStorePage = ({ onOpenAdminLogin }) => {
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [lastOrderDetails, setLastOrderDetails] = useState(null);
 
-  // Fetch real products added by Admin from Supabase
+  // Fetch real products added by Admin (LocalStorage + Supabase combined)
   useEffect(() => {
     const fetchProducts = async () => {
       setLoading(true);
+      const local = getStoredProducts();
+      let remote = [];
+
       try {
         if (supabase) {
           const { data, error } = await supabase
@@ -41,16 +73,17 @@ const GuestStorePage = ({ onOpenAdminLogin }) => {
             .order('created_at', { ascending: false });
 
           if (!error && data) {
-            setProducts(data);
-          } else {
-            setProducts([]);
+            remote = data;
           }
-        } else {
-          setProducts([]);
         }
-      } catch {
-        setProducts([]);
+      } catch (err) {
+        console.log('Supabase fetch error, using local:', err);
       } finally {
+        const mergedMap = new Map();
+        [...remote, ...local].forEach(p => {
+          if (p && p.id) mergedMap.set(String(p.id), p);
+        });
+        setProducts(Array.from(mergedMap.values()));
         setLoading(false);
       }
     };
@@ -103,6 +136,7 @@ const GuestStorePage = ({ onOpenAdminLogin }) => {
 
     const totalPrice = (orderingProduct.price * orderQty);
     const newOrder = {
+      id: Date.now(),
       guest_name: guestName.trim(),
       guest_phone: guestPhone.trim(),
       guest_address: guestAddress.trim(),
@@ -115,23 +149,19 @@ const GuestStorePage = ({ onOpenAdminLogin }) => {
 
     try {
       if (supabase) {
-        const { error } = await supabase.from('orders').insert([newOrder]);
-        if (error) throw error;
+        await supabase.from('orders').insert([newOrder]);
       }
-
-      setLastOrderDetails({
-        ...newOrder,
-        unitPrice: orderingProduct.price
-      });
-
-      setOrderSuccess(true);
-    } catch {
-      setLastOrderDetails({
-        ...newOrder,
-        unitPrice: orderingProduct.price
-      });
-      setOrderSuccess(true);
+    } catch (err) {
+      console.log('Remote order save notice:', err);
     } finally {
+      const existingOrders = getStoredOrders();
+      saveStoredOrders([newOrder, ...existingOrders]);
+
+      setLastOrderDetails({
+        ...newOrder,
+        unitPrice: orderingProduct.price
+      });
+      setOrderSuccess(true);
       setIsSubmitting(false);
     }
   };

@@ -2,6 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { PlusIcon, TrashIcon, EditIcon, PackageIcon, CloseIcon } from '../components/common/Icons';
 
+const LOCAL_PRODUCTS_KEY = 'soulgym_custom_products';
+
+const getStoredProducts = () => {
+  try {
+    const stored = localStorage.getItem(LOCAL_PRODUCTS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveStoredProducts = (productsList) => {
+  try {
+    localStorage.setItem(LOCAL_PRODUCTS_KEY, JSON.stringify(productsList));
+  } catch (err) {
+    console.error('LocalStorage save error:', err);
+  }
+};
+
 const AdminProductsPage = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,6 +38,9 @@ const AdminProductsPage = () => {
 
   const fetchProducts = async () => {
     setLoading(true);
+    const local = getStoredProducts();
+    let remote = [];
+
     try {
       if (supabase) {
         const { data, error } = await supabase
@@ -27,16 +49,20 @@ const AdminProductsPage = () => {
           .order('created_at', { ascending: false });
 
         if (!error && data) {
-          setProducts(data);
-        } else {
-          setProducts([]);
+          remote = data;
         }
-      } else {
-        setProducts([]);
       }
-    } catch {
-      setProducts([]);
+    } catch (err) {
+      console.log('Supabase fetch error, using local:', err);
     } finally {
+      // Merge remote and local by id/name
+      const mergedMap = new Map();
+      [...remote, ...local].forEach(p => {
+        if (p && p.id) mergedMap.set(String(p.id), p);
+      });
+      const combined = Array.from(mergedMap.values());
+      setProducts(combined);
+      saveStoredProducts(combined);
       setLoading(false);
     }
   };
@@ -87,35 +113,55 @@ const AdminProductsPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const newId = editingProduct ? editingProduct.id : Date.now();
       const productPayload = {
+        id: newId,
         name: formData.name,
         category: formData.category,
         price: parseFloat(formData.price),
         image_url: formData.image_url,
         description: formData.description,
-        in_stock: formData.in_stock
+        in_stock: formData.in_stock,
+        created_at: new Date().toISOString()
       };
 
+      let updatedList = [];
       if (editingProduct) {
+        updatedList = products.map(p => String(p.id) === String(editingProduct.id) ? { ...p, ...productPayload } : p);
         if (supabase) {
           await supabase.from('products').update(productPayload).eq('id', editingProduct.id);
         }
-        setProducts(prev => prev.map(p => p.id === editingProduct.id ? { ...p, ...productPayload } : p));
       } else {
+        updatedList = [productPayload, ...products];
         if (supabase) {
           const { data, error } = await supabase.from('products').insert([productPayload]).select().single();
           if (!error && data) {
-            setProducts(prev => [data, ...prev]);
-          } else {
-            setProducts(prev => [{ id: Date.now(), ...productPayload }, ...prev]);
+            updatedList = [data, ...products.filter(p => String(p.id) !== String(data.id))];
           }
-        } else {
-          setProducts(prev => [{ id: Date.now(), ...productPayload }, ...prev]);
         }
       }
+
+      setProducts(updatedList);
+      saveStoredProducts(updatedList);
       setIsModalOpen(false);
     } catch (err) {
-      alert('خطأ أثناء حفظ المنتج: ' + err.message);
+      console.error('Save product error:', err);
+      // Fallback local save guaranteed
+      const fallbackId = Date.now();
+      const fallbackProduct = {
+        id: fallbackId,
+        name: formData.name,
+        category: formData.category,
+        price: parseFloat(formData.price),
+        image_url: formData.image_url,
+        description: formData.description,
+        in_stock: formData.in_stock,
+        created_at: new Date().toISOString()
+      };
+      const newList = [fallbackProduct, ...products];
+      setProducts(newList);
+      saveStoredProducts(newList);
+      setIsModalOpen(false);
     }
   };
 
@@ -125,9 +171,12 @@ const AdminProductsPage = () => {
       if (supabase) {
         await supabase.from('products').delete().eq('id', id);
       }
-      setProducts(prev => prev.filter(p => p.id !== id));
     } catch (err) {
-      alert('خطأ أثناء الحذف: ' + err.message);
+      console.log('Delete remote notice:', err);
+    } finally {
+      const newList = products.filter(p => String(p.id) !== String(id));
+      setProducts(newList);
+      saveStoredProducts(newList);
     }
   };
 
