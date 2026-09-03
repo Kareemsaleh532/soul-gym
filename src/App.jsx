@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { addMonths, addYears, addDays, isAfter } from 'date-fns';
+import { addMonths, addDays, isAfter } from 'date-fns';
 import { supabase } from './lib/supabase';
 
 // Common Components
@@ -12,13 +12,11 @@ import AuthPage from './pages/AuthPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import NotificationsPage from './pages/NotificationsPage';
 import SettingsPage from './pages/SettingsPage';
-import MemberPortalPage from './pages/MemberPortalPage';
 
 function App() {
   // Session / Auth States
   const [sessionUser, setSessionUser] = useState(null);
-  const [sessionRole, setSessionRole] = useState(null); // 'admin' | 'user'
-  const [memberProfile, setMemberProfile] = useState(null);
+  const [sessionRole, setSessionRole] = useState(null); // 'admin'
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // App Layout States
@@ -48,18 +46,6 @@ function App() {
     name: '', phone: '', plan_type: 'Pro Membership', duration_months: '1', duration_days: ''
   });
 
-  // Self Check-in Portal States
-  const [isCheckingIn, setIsCheckingIn] = useState(false);
-  const [checkInSuccessShow, setCheckInSuccessShow] = useState(false);
-  const [checkInHistory, setCheckInHistory] = useState(() => {
-    try {
-      const stored = localStorage.getItem('soulgym_checkins');
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
-
   // Debounce Search
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -75,18 +61,6 @@ function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // Fetch Member Profile for Member User
-  const fetchMemberProfile = async (user) => {
-    try {
-      const phoneNum = user.user_metadata?.phone;
-      if (!phoneNum || !supabase) return;
-      const { data } = await supabase.from('members').select('*').eq('phone', phoneNum).maybeSingle();
-      if (data) setMemberProfile(data);
-    } catch (err) {
-      console.error('Member profile error:', err.message);
-    }
-  };
-
   // Auth Session Verification
   useEffect(() => {
     const initSession = async () => {
@@ -95,9 +69,7 @@ function App() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           setSessionUser(session.user);
-          const role = session.user.user_metadata?.role || 'user';
-          setSessionRole(role);
-          if (role === 'user') await fetchMemberProfile(session.user);
+          setSessionRole('admin');
         }
       } catch (err) {
         console.error('Session error:', err);
@@ -112,13 +84,10 @@ function App() {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (session?.user) {
           setSessionUser(session.user);
-          const role = session.user.user_metadata?.role || 'user';
-          setSessionRole(role);
-          if (role === 'user') await fetchMemberProfile(session.user);
+          setSessionRole('admin');
         } else {
           setSessionUser(null);
           setSessionRole(null);
-          setMemberProfile(null);
         }
         setIsAuthLoading(false);
       });
@@ -128,7 +97,6 @@ function App() {
 
   // Admin Data Fetch
   const fetchMembers = useCallback(async () => {
-    if (sessionRole !== 'admin') return;
     setIsLoading(true);
     try {
       if (!supabase) throw new Error('Supabase client missing.');
@@ -159,10 +127,9 @@ function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [sessionRole]);
+  }, []);
 
   const fetchNotifications = useCallback(async (shouldUpdateUnread = true) => {
-    if (sessionRole !== 'admin') return;
     setIsNotifLoading(true);
     try {
       const now = new Date().toISOString();
@@ -180,26 +147,25 @@ function App() {
     } finally {
       setIsNotifLoading(false);
     }
-  }, [sessionRole]);
+  }, []);
 
   useEffect(() => {
-    if (sessionRole === 'admin') {
+    if (sessionUser) {
       fetchMembers();
       fetchNotifications(true);
     }
-  }, [sessionRole, fetchMembers, fetchNotifications]);
+  }, [sessionUser, fetchMembers, fetchNotifications]);
 
   // Auth Handlers
-  const handleAuthSuccess = (user, role) => {
+  const handleAuthSuccess = (user) => {
     setSessionUser(user);
-    setSessionRole(role);
+    setSessionRole('admin');
   };
 
   const handleLogout = async () => {
     if (supabase) await supabase.auth.signOut();
     setSessionUser(null);
     setSessionRole(null);
-    setMemberProfile(null);
   };
 
   // Modal Handlers
@@ -289,28 +255,6 @@ function App() {
     }
   };
 
-  // Self Check-in
-  const handleSelfCheckIn = async () => {
-    if (!memberProfile || !supabase) return;
-    setIsCheckingIn(true);
-    try {
-      const nowStr = `${new Date().toLocaleDateString('ar-EG')} - ${new Date().toLocaleTimeString('ar-EG')}`;
-      await supabase.from('members').update({ last_check_in: nowStr }).eq('id', memberProfile.id);
-      setMemberProfile({ ...memberProfile, last_check_in: nowStr });
-
-      const updatedHistory = [`دخول ناجح في ${nowStr}`, ...checkInHistory.slice(0, 10)];
-      setCheckInHistory(updatedHistory);
-      localStorage.setItem('soulgym_checkins', JSON.stringify(updatedHistory));
-
-      setCheckInSuccessShow(true);
-      setTimeout(() => setCheckInSuccessShow(false), 4000);
-    } catch (err) {
-      alert('خطأ أثناء الدخول: ' + err.message);
-    } finally {
-      setIsCheckingIn(false);
-    }
-  };
-
   // Filter & Pagination Calculations
   const filteredMembers = useMemo(() => {
     const filtered = members.filter(member => {
@@ -356,20 +300,6 @@ function App() {
 
   if (!sessionUser) {
     return <AuthPage onAuthSuccess={handleAuthSuccess} />;
-  }
-
-  if (sessionRole === 'user') {
-    return (
-      <MemberPortalPage 
-        sessionUser={sessionUser}
-        memberProfile={memberProfile}
-        onLogout={handleLogout}
-        onSelfCheckIn={handleSelfCheckIn}
-        isCheckingIn={isCheckingIn}
-        checkInSuccessShow={checkInSuccessShow}
-        checkInHistory={checkInHistory}
-      />
-    );
   }
 
   return (

@@ -6,9 +6,7 @@ const AuthPage = ({ onAuthSuccess }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState('user');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -23,24 +21,17 @@ const AuthPage = ({ onAuthSuccess }) => {
       if (isLogin) {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        const userRole = data.user?.user_metadata?.role || 'user';
+        const userRole = data.user?.user_metadata?.role || 'admin';
         if (onAuthSuccess) onAuthSuccess(data.user, userRole);
       } else {
-        if (phone) {
-          const phoneRegex = /^(056|059)\d{7}$/;
-          if (!phoneRegex.test(phone)) {
-            throw new Error('رقم الهاتف يجب أن يكون 10 أرقام ويبدأ بـ 056 أو 059');
-          }
-        }
-
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { name, phone, role } }
+          options: { data: { name, role: 'admin' } }
         });
 
         if (error) throw error;
-        const userRole = data.user?.user_metadata?.role || role;
+        const userRole = data.user?.user_metadata?.role || 'admin';
         if (onAuthSuccess) onAuthSuccess(data.user, userRole);
       }
     } catch (err) {
@@ -67,7 +58,7 @@ const AuthPage = ({ onAuthSuccess }) => {
           </div>
           <h1 className="title-md">SOUL <span className="gradient-text">GYM</span></h1>
           <p className="subtitle" style={{ marginTop: '0.25rem' }}>
-            {isLogin ? 'تسجيل الدخول إلى حسابك' : 'إنشاء حساب جديد'}
+            {isLogin ? 'تسجيل دخول مدير النظام' : 'إنشاء حساب مدير جديد'}
           </p>
         </div>
 
@@ -83,28 +74,15 @@ const AuthPage = ({ onAuthSuccess }) => {
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {!isLogin && (
-            <>
-              <div className="form-group">
-                <label className="form-label">الاسم الكامل</label>
-                <input type="text" required className="form-control" placeholder="أدخل اسمك..." value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">رقم الهاتف (اختياري)</label>
-                <input type="tel" className="form-control" placeholder="059XXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">نوع الحساب</label>
-                <select className="form-control" value={role} onChange={(e) => setRole(e.target.value)}>
-                  <option value="user">عضو (Member)</option>
-                  <option value="admin">مدير النظام (Admin)</option>
-                </select>
-              </div>
-            </>
+            <div className="form-group">
+              <label className="form-label">الاسم الكامل</label>
+              <input type="text" required className="form-control" placeholder="أدخل اسمك..." value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
           )}
 
           <div className="form-group">
             <label className="form-label">البريد الإلكتروني</label>
-            <input type="email" required className="form-control" placeholder="user@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input type="email" required className="form-control" placeholder="admin@soulgym.com" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
 
           <div className="form-group">
@@ -125,7 +103,7 @@ const AuthPage = ({ onAuthSuccess }) => {
           >
             {isLogin ? 'ليس لديك حساب؟ ' : 'لديك حساب بالفعل؟ '}
             <span style={{ color: 'var(--accent-primary)', fontWeight: '600' }}>
-              {isLogin ? 'إنشاء حساب جديد' : 'تسجيل الدخول'}
+              {isLogin ? 'إنشاء حساب مدير' : 'تسجيل الدخول'}
             </span>
           </button>
         </div>
