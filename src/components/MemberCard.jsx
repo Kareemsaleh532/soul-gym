@@ -1,240 +1,128 @@
-import { differenceInDays, isAfter, parseISO } from 'date-fns';
-import { Phone, Clock, User, Timer, Edit2, Trash2 } from 'lucide-react';
-import { motion } from 'framer-motion';
-
-const memberCopy = {
-  ar: {
-    subscribed: 'مشترك',
-    warning: 'ينتهي قريبًا',
-    ended: 'انتهى الاشتراك',
-    noPhoto: 'بدون صورة',
-    ends: 'ينتهي:',
-    daysLeft: (days) => `${days} يوم متبقي`,
-    planDays: (days) => `من خطة ${days} يوم`,
-    lastSeen: 'آخر ظهور:',
-    never: 'أبدًا',
-    renewSoon: 'يلزم التجديد قريبًا',
-    expiredAgo: (days) => `انتهى الاشتراك منذ ${days} يوم`,
-    edit: 'تعديل',
-    delete: 'حذف',
-    plans: {
-      'Basic Plan': 'الخطة الأساسية',
-      'Pro Membership': 'اشتراك برو',
-      'Elite Training': 'تدريب النخبة'
-    }
-  },
-  en: {
-    subscribed: 'Subscribed',
-    warning: 'Expiring Soon',
-    ended: 'Subscription Ended',
-    noPhoto: 'No Photo',
-    ends: 'Ends:',
-    daysLeft: (days) => `${days}d left`,
-    planDays: (days) => `of ${days} day plan`,
-    lastSeen: 'Last seen:',
-    never: 'Never',
-    renewSoon: 'Renewal required soon',
-    expiredAgo: (days) => `Subscription expired ${days} days ago`,
-    edit: 'Edit',
-    delete: 'Delete',
-    plans: {
-      'Basic Plan': 'Basic Plan',
-      'Pro Membership': 'Pro Membership',
-      'Elite Training': 'Elite Training'
-    }
-  }
-};
+import React, { useState } from 'react';
 
 const MemberCard = ({ member, onEdit, onDelete, language = 'ar' }) => {
-  const t = memberCopy[language] || memberCopy.ar;
-  const isRtl = language === 'ar';
-  const endDate = typeof member.subscription_end === 'string' ? parseISO(member.subscription_end) : member.subscription_end;
-  const startDate = member.subscription_start ? (typeof member.subscription_start === 'string' ? parseISO(member.subscription_start) : member.subscription_start) : null;
-  const daysLeft = differenceInDays(endDate, new Date());
-  const totalDays = startDate ? differenceInDays(endDate, startDate) : 0;
-  const isActive = isAfter(endDate, new Date());
-  const dateLabel = new Intl.DateTimeFormat(language === 'ar' ? 'ar' : 'en', {
-    month: 'short',
-    day: '2-digit',
-    year: 'numeric'
-  }).format(endDate);
+  const [isFlipped, setIsFlipped] = useState(false);
 
-  let status = 'active';
-  if (!isActive) status = 'expired';
-  else if (daysLeft <= 10) status = 'warning';
-
-  const getStatusLabel = () => {
-    if (status === 'active') return t.subscribed;
-    if (status === 'warning') return t.warning;
-    return t.ended;
+  const calculateDaysLeft = (subscriptionEnd) => {
+    const end = new Date(subscriptionEnd);
+    const now = new Date();
+    const diffTime = end - now;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
-  const planLabel = t.plans[member.plan_type] || member.plan_type || member.plan;
+  const daysLeft = calculateDaysLeft(member.subscription_end);
+  const isActive = daysLeft > 0;
+  const isExpiringSoon = isActive && daysLeft <= 10;
+
+  const getStatusBadge = () => {
+    if (!isActive) {
+      return { text: language === 'ar' ? 'منتهي' : 'Expired', className: 'status-expired' };
+    }
+    if (isExpiringSoon) {
+      return { text: language === 'ar' ? `ينتهي خلال ${daysLeft} أيام` : `Expires in ${daysLeft}d`, className: 'status-warning' };
+    }
+    return { text: language === 'ar' ? 'نشط' : 'Active', className: 'status-active' };
+  };
+
+  const status = getStatusBadge();
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      whileHover={{ y: -5 }}
-      className="glass-card member-card"
-      style={{ position: 'relative', overflow: 'hidden', cursor: 'pointer' }}
-      onClick={() => onEdit(member)}
-    >
-      <div className="card-actions" style={{
-        position: 'absolute',
-        top: '12px',
-        [isRtl ? 'left' : 'right']: '12px',
+    <div 
+      className="glass-panel"
+      style={{
+        padding: '1.5rem',
         display: 'flex',
-        gap: '8px',
-        zIndex: 5
-      }}>
-        <button
-          aria-label={t.edit}
-          onClick={(e) => { e.stopPropagation(); onEdit(member); }}
-          style={{
-            background: 'var(--glass)',
-            border: '1px solid var(--glass-border)',
-            color: 'var(--text-dim)',
-            padding: '6px',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            transition: 'all 0.2s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'}
-          onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-dim)'}
-        >
-          <Edit2 size={14} />
-        </button>
-        <button
-          aria-label={t.delete}
-          onClick={(e) => { e.stopPropagation(); onDelete(member.id); }}
-          style={{
-            background: 'var(--glass)',
-            border: '1px solid var(--glass-border)',
-            color: 'var(--text-dim)',
-            padding: '6px',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            transition: 'all 0.2s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.color = 'var(--status-expired)'}
-          onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-dim)'}
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
-
-      {isActive && (
-        <div style={{
-          position: 'absolute',
-          bottom: 0,
-          [isRtl ? 'right' : 'left']: 0,
-          height: '4px',
-          background: status === 'warning' ? 'var(--status-warning)' : 'var(--status-active)',
-          width: `${Math.min(100, (daysLeft / 30) * 100)}%`,
-          opacity: 0.5,
-          transition: 'width 1s ease-in-out'
-        }} />
-      )}
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <div style={{ width: '56px', height: '56px', borderRadius: '14px', background: 'var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)', overflow: 'hidden', fontSize: '0.75rem', textAlign: 'center' }}>
-            {member.avatar ? (
-              <img src={member.avatar} alt={member.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            ) : (
-              t.noPhoto
-            )}
-          </div>
+        flexDirection: 'column',
+        gap: '1rem',
+        position: 'relative',
+        overflow: 'hidden'
+      }}
+    >
+      {/* Top Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <img 
+            src={member.avatar || `https://i.pravatar.cc/150?u=${member.phone || member.name}`} 
+            alt={member.name} 
+            style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '16px',
+              objectFit: 'cover',
+              border: '1px solid var(--border-subtle)'
+            }}
+          />
           <div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>{member.name}</h3>
-            <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>{planLabel}</p>
+            <h4 style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
+              {member.name}
+            </h4>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              {member.phone || (language === 'ar' ? 'بدون هاتف' : 'No Phone')}
+            </span>
           </div>
         </div>
-        <span className={`status-badge status-${status}`} style={{ margin: isRtl ? '0 0 0 40px' : '0 40px 0 0' }}>
-          {getStatusLabel()}
+        <span className={`status-badge ${status.className}`}>
+          {status.text}
         </span>
       </div>
 
-      <div style={{ display: 'grid', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-dim)', fontSize: '0.9rem' }}>
-          <Phone size={16} />
-          <span>{member.phone || '-'}</span>
+      {/* Subscription Details */}
+      <div style={{
+        background: 'var(--bg-primary)',
+        padding: '0.875rem 1rem',
+        borderRadius: '12px',
+        border: '1px solid var(--border-subtle)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        fontSize: '0.875rem'
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>
+            {language === 'ar' ? 'نوع الاشتراك' : 'Plan'}
+          </span>
+          <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
+            {member.plan_type || 'Pro Membership'}
+          </span>
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-dim)', fontSize: '0.9rem' }}>
-            <Clock size={16} />
-            <span>{t.ends} {dateLabel}</span>
-          </div>
-
-          {isActive && (
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: isRtl ? 'flex-start' : 'flex-end',
-              gap: '2px'
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                color: status === 'warning' ? 'var(--status-warning)' : 'var(--status-active)',
-                fontWeight: 700,
-                fontSize: '1rem'
-              }}>
-                <Timer size={18} />
-                <span>{t.daysLeft(daysLeft)}</span>
-              </div>
-              {totalDays > 0 && (
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 500 }}>
-                  {t.planDays(totalDays)}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-dim)', fontSize: '0.9rem' }}>
-          <User size={16} />
-          <span>{t.lastSeen} {member.last_check_in || member.lastCheckIn || t.never}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
+          <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>
+            {language === 'ar' ? 'ينتهي في' : 'Expires'}
+          </span>
+          <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
+            {new Date(member.subscription_end).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US', {
+              year: 'numeric', month: 'short', day: 'numeric'
+            })}
+          </span>
         </div>
       </div>
 
-      {status === 'warning' && (
-        <div style={{
-          marginTop: '16px',
-          padding: '10px',
-          background: 'rgba(255, 193, 7, 0.08)',
-          borderRadius: '10px',
-          border: '1px solid rgba(255, 193, 7, 0.2)',
-          fontSize: '0.85rem',
-          textAlign: 'center',
-          color: 'var(--status-warning)',
-          fontWeight: 600
-        }}>
-          {t.renewSoon}
-        </div>
-      )}
-
-      {!isActive && (
-        <div style={{
-          marginTop: '16px',
-          padding: '10px',
-          background: 'rgba(244, 67, 54, 0.08)',
-          borderRadius: '10px',
-          border: '1px solid rgba(244, 67, 54, 0.2)',
-          fontSize: '0.85rem',
-          textAlign: 'center',
-          color: 'var(--status-expired)',
-          fontWeight: 600
-        }}>
-          {t.expiredAgo(Math.abs(daysLeft))}
-        </div>
-      )}
-    </motion.div>
+      {/* Action Buttons */}
+      <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
+        <button 
+          onClick={() => onEdit(member)} 
+          className="btn-secondary" 
+          style={{ flex: 1, padding: '0.5rem', fontSize: '0.875rem' }}
+        >
+          {/* Edit SVG */}
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+          </svg>
+          {language === 'ar' ? 'تعديل' : 'Edit'}
+        </button>
+        <button 
+          onClick={() => onDelete(member.id)} 
+          className="btn-icon" 
+          style={{ color: '#ff471a', background: 'rgba(255, 71, 26, 0.1)', borderColor: 'rgba(255, 71, 26, 0.2)' }}
+          title={language === 'ar' ? 'حذف' : 'Delete'}
+        >
+          {/* Trash SVG */}
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+          </svg>
+        </button>
+      </div>
+    </div>
   );
 };
 
