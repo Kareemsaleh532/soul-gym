@@ -5,13 +5,18 @@ import {
   BellIcon, 
   SettingsIcon, 
   DumbbellIcon, 
-  LogoutIcon 
+  LogoutIcon,
+  ShoppingCartIcon,
+  PackageIcon,
+  StoreIcon
 } from './Icons';
 
-const Sidebar = ({ activeTab, setActiveTab, unreadNotifs = 0, onLogout, isMobileOpen, setIsMobileOpen }) => {
+const Sidebar = ({ activeTab, setActiveTab, unreadNotifs = 0, newOrdersCount = 0, onLogout, onOpenGuestStore, isMobileOpen, setIsMobileOpen }) => {
   const navItems = [
     { id: 'Dashboard', label: 'لوحة التحكم', icon: DashboardIcon },
-    { id: 'Members', label: 'الأعضاء', icon: UsersIcon },
+    { id: 'Members', label: 'دليل الأعضاء', icon: UsersIcon },
+    { id: 'Orders', label: 'طلبات المتجر', icon: ShoppingCartIcon, badge: newOrdersCount },
+    { id: 'Products', label: 'إدارة المنتجات', icon: PackageIcon },
     { id: 'Notifications', label: 'التنبيهات', icon: BellIcon, badge: unreadNotifs },
     { id: 'Settings', label: 'الإعدادات', icon: SettingsIcon },
   ];
@@ -49,7 +54,7 @@ const Sidebar = ({ activeTab, setActiveTab, unreadNotifs = 0, onLogout, isMobile
         transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
       }}>
         {/* Brand */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '3rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2.5rem' }}>
           <div style={{
             width: '44px',
             height: '44px',
@@ -64,8 +69,8 @@ const Sidebar = ({ activeTab, setActiveTab, unreadNotifs = 0, onLogout, isMobile
             <DumbbellIcon />
           </div>
           <div>
-            <h2 className="title-md" style={{ fontSize: '1.25rem', lineHeight: 1 }}>SOUL<span className="gradient-text">GYM</span></h2>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>الإصدار احترافي</span>
+            <h2 className="title-md" style={{ fontSize: '1.25rem', lineHeight: 1, margin: 0 }}>SOUL<span className="gradient-text">GYM</span></h2>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>لوحة إدراة النادي</span>
           </div>
         </div>
 
@@ -120,15 +125,24 @@ const Sidebar = ({ activeTab, setActiveTab, unreadNotifs = 0, onLogout, isMobile
           })}
         </nav>
 
-        {/* User Card & Logout */}
+        {/* Guest Store Preview Link & Logout */}
         <div style={{
           marginTop: 'auto',
-          paddingTop: '1.5rem',
+          paddingTop: '1.25rem',
           borderTop: '1px solid var(--border-subtle)',
           display: 'flex',
           flexDirection: 'column',
-          gap: '1rem'
+          gap: '0.75rem'
         }}>
+          <button 
+            className="btn-subtle" 
+            onClick={onOpenGuestStore} 
+            style={{ width: '100%', justifyContent: 'center', color: 'var(--accent-primary)', borderColor: 'rgba(255, 71, 26, 0.25)' }}
+          >
+            <StoreIcon />
+            <span>عرض متجر الزوار 🌐</span>
+          </button>
+
           <button className="btn-subtle" onClick={onLogout} style={{ width: '100%', justifyContent: 'center' }}>
             <LogoutIcon />
             <span>تسجيل الخروج</span>

@@ -12,11 +12,16 @@ import AuthPage from './pages/AuthPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import NotificationsPage from './pages/NotificationsPage';
 import SettingsPage from './pages/SettingsPage';
+import GuestStorePage from './pages/GuestStorePage';
+import AdminProductsPage from './pages/AdminProductsPage';
+import AdminOrdersPage from './pages/AdminOrdersPage';
 
 function App() {
+  // Navigation / View Mode: 'guest' | 'auth' | 'admin'
+  const [viewMode, setViewMode] = useState('guest');
+
   // Session / Auth States
   const [sessionUser, setSessionUser] = useState(null);
-  const [sessionRole, setSessionRole] = useState(null); // 'admin'
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // App Layout States
@@ -34,6 +39,7 @@ function App() {
   // Data States
   const [members, setMembers] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isNotifLoading, setIsNotifLoading] = useState(false);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
@@ -69,7 +75,9 @@ function App() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           setSessionUser(session.user);
-          setSessionRole('admin');
+          setViewMode('admin');
+        } else {
+          setViewMode('guest');
         }
       } catch (err) {
         console.error('Session error:', err);
@@ -84,10 +92,10 @@ function App() {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (session?.user) {
           setSessionUser(session.user);
-          setSessionRole('admin');
+          setViewMode('admin');
         } else {
           setSessionUser(null);
-          setSessionRole(null);
+          setViewMode('guest');
         }
         setIsAuthLoading(false);
       });
@@ -149,23 +157,40 @@ function App() {
     }
   }, []);
 
+  const fetchOrdersCount = useCallback(async () => {
+    try {
+      if (!supabase) return;
+      const { count, error } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'جديد');
+
+      if (!error && count !== null) {
+        setNewOrdersCount(count);
+      }
+    } catch (err) {
+      console.error('Fetch orders count error:', err);
+    }
+  }, []);
+
   useEffect(() => {
     if (sessionUser) {
       fetchMembers();
       fetchNotifications(true);
+      fetchOrdersCount();
     }
-  }, [sessionUser, fetchMembers, fetchNotifications]);
+  }, [sessionUser, fetchMembers, fetchNotifications, fetchOrdersCount]);
 
   // Auth Handlers
   const handleAuthSuccess = (user) => {
     setSessionUser(user);
-    setSessionRole('admin');
+    setViewMode('admin');
   };
 
   const handleLogout = async () => {
     if (supabase) await supabase.auth.signOut();
     setSessionUser(null);
-    setSessionRole(null);
+    setViewMode('guest');
   };
 
   // Modal Handlers
@@ -298,10 +323,26 @@ function App() {
     );
   }
 
-  if (!sessionUser) {
-    return <AuthPage onAuthSuccess={handleAuthSuccess} />;
+  // 1. Guest View (Public Store Landing Page)
+  if (viewMode === 'guest') {
+    return <GuestStorePage onOpenAdminLogin={() => setViewMode('auth')} />;
   }
 
+  // 2. Admin Auth Page
+  if (viewMode === 'auth' && !sessionUser) {
+    return (
+      <div>
+        <div style={{ padding: '1rem 2rem', background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <button className="btn-subtle" onClick={() => setViewMode('guest')}>
+            ← العودة لمتجر الزوار 🛒
+          </button>
+        </div>
+        <AuthPage onAuthSuccess={handleAuthSuccess} />
+      </div>
+    );
+  }
+
+  // 3. Admin Dashboard View
   return (
     <div className="layout-wrapper" dir="rtl">
       <Sidebar 
@@ -311,16 +352,24 @@ function App() {
           if (tab === 'Notifications') setUnreadNotifs(0);
         }} 
         unreadNotifs={unreadNotifs}
+        newOrdersCount={newOrdersCount}
         onLogout={handleLogout}
+        onOpenGuestStore={() => setViewMode('guest')}
         isMobileOpen={isMobileOpen}
         setIsMobileOpen={setIsMobileOpen}
       />
 
       <div className="layout-main">
         <Header 
-          title={activeTab === 'Dashboard' ? 'لوحة التحكم والمباشرة' : activeTab === 'Members' ? 'دليل الأعضاء' : activeTab === 'Notifications' ? 'التنبيهات' : 'الإعدادات'} 
+          title={
+            activeTab === 'Dashboard' ? 'لوحة التحكم والمباشرة' :
+            activeTab === 'Members' ? 'دليل الأعضاء' :
+            activeTab === 'Orders' ? 'طلبات الشراء القادمة' :
+            activeTab === 'Products' ? 'إدارة المنتجات والمكملات' :
+            activeTab === 'Notifications' ? 'التنبيهات' : 'الإعدادات'
+          } 
           onMenuToggle={() => setIsMobileOpen(true)}
-          onRefresh={fetchMembers}
+          onRefresh={() => { fetchMembers(); fetchOrdersCount(); }}
           onNewSubscription={() => handleOpenModal()}
           isLoading={isLoading}
           searchTerm={searchTerm}
@@ -363,6 +412,14 @@ function App() {
               onOpenModal={handleOpenModal}
               onDeleteMember={handleDeleteMember}
             />
+          )}
+
+          {activeTab === 'Orders' && (
+            <AdminOrdersPage />
+          )}
+
+          {activeTab === 'Products' && (
+            <AdminProductsPage />
           )}
 
           {activeTab === 'Notifications' && (
